@@ -112,9 +112,9 @@ end
 
 class GameObject
   attr_accessor :pos, :vel, :direction, :image
-  def initialize
+  def initialize (color=[255,255,255])
     @image = Rubygame::Surface.new([Constants::PLAYER_SIZE, Constants::PLAYER_SIZE])
-    @image.fill([255, 255, 255])
+    @image.fill(color)
 
     @pos = Point.new(0, 0)
     @vel = Point.new(0, 0)
@@ -300,7 +300,7 @@ class Player < GameObject
   end
 
   def piece_factory
-    piece = GameObject.new
+    piece = GameObject.new([255-@pieces.size*5,255-@pieces.size*5,255-@pieces.size*5])
     tail = @pieces.last || self
     piece.copy(tail)
     offset = Constants::TRAIL_OFFSET # * (@pieces.size+1)
