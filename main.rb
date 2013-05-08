@@ -1,26 +1,27 @@
 #!/usr/bin/env ruby
 
-#require "rubygems"
 require "rubygame"
 Rubygame::TTF.setup
 
 class Constants
-  PLAYER_SPEED = 5
+  PLAYER_SPEED = 4
+  TRAIL_OFFSET = 16
+  PLAYER_SIZE  = 16
 end
 
 class Main
   def initialize
-    @screen = Rubygame::Screen.new([640, 480], 0, [Rubygame::HWSURFACE, Rubygame::DOUBLEBUF])
+    @screen = Rubygame::Screen.new([640, 640], 0, [Rubygame::HWSURFACE, Rubygame::DOUBLEBUF])
     @screen.title = "Adventrail"
 
     @queue = Rubygame::EventQueue.new
     @clock = Rubygame::Clock.new
     @clock.target_framerate = 30
 
-    @background = Rubygame::Surface.new([640, 480])
+    @background = Rubygame::Surface.new([640, 640])
     @background.fill([0, 0, 0])
 
-    @player = GameObject.new
+    @player = Player.new
   end
 
   def run
@@ -40,6 +41,8 @@ class Main
   def update
     @player.update
 
+    quit unless @player.living?
+
     @queue.each do |event|
       case event
         when Rubygame::QuitEvent
@@ -47,19 +50,25 @@ class Main
         exit
         when Rubygame::KeyDownEvent
         if event.key == Rubygame::K_UP
-          @player.move_up
+          @player.move_up unless @player.vertical?
         elsif event.key == Rubygame::K_DOWN
-          @player.move_down
+          @player.move_down unless @player.vertical?
         elsif event.key == Rubygame::K_LEFT
-          @player.move_left
+          @player.move_left unless @player.horizontal?
         elsif event.key == Rubygame::K_RIGHT
-          @player.move_right
+          @player.move_right unless @player.horizontal?
+        elsif event.key == Rubygame::K_N
+          @player.add_piece
         elsif event.key == Rubygame::K_ESCAPE
-          Rubygame.quit
-          exit
+          quit
         end
       end
     end
+  end
+
+  def quit
+    Rubygame.quit
+    exit
   end
 end
 
@@ -79,28 +88,91 @@ class Point
     @x = x
     @y = y
   end
+
+  def to_s
+    "#{@x},#{@y}"
+  end
+
+  def == (other)
+    !other.nil? && @x == other.x && @y == other.y
+  end
+end
+
+class TurningPoint < Point
+  attr_accessor :direction
+  def initialize (x=0, y=0, direction=nil)
+    super x, y
+    @direction = direction
+  end
+
+  def to_s
+    super + ",#{@direction}"
+  end
 end
 
 class GameObject
+  attr_accessor :pos, :vel, :direction, :image
   def initialize
-    @image = Rubygame::Surface.new([16, 16])
+    @image = Rubygame::Surface.new([Constants::PLAYER_SIZE, Constants::PLAYER_SIZE])
     @image.fill([255, 255, 255])
 
     @pos = Point.new(0, 0)
     @vel = Point.new(0, 0)
+    @direction = nil
+
+    @turns = []
+    @cycles = 0
   end
 
   def x
     @pos.x
   end
 
+  def x= (nx)
+    @pos.x = nx
+  end
+
   def y
     @pos.y
   end
 
+  def y= (ny)
+    @pos.y = ny
+  end
+
   def update
+    turn_to @turns.shift if @pos == @turns.first
     @pos.x += @vel.x
     @pos.y += @vel.y
+  end
+
+  def collide? (other)
+    return false if other.nil?
+
+    col_x = 0
+    col_y = 0
+
+    if up?
+      col_x = @pos.x + Constants::PLAYER_SIZE / 2
+      col_y = @pos.y
+    elsif down?
+      col_x = @pos.x + Constants::PLAYER_SIZE / 2
+      col_y = @pos.y + Constants::PLAYER_SIZE
+    elsif left?
+      col_x = @pos.x
+      col_y = @pos.y + Constants::PLAYER_SIZE / 2
+    elsif right?
+      col_x = @pos.x + Constants::PLAYER_SIZE
+      col_y = @pos.y + Constants::PLAYER_SIZE / 2
+    end
+
+    if col_x > other.pos.x && col_x < other.pos.x + Constants::PLAYER_SIZE
+      if col_y > other.pos.y && col_y < other.pos.y + Constants::PLAYER_SIZE
+        return true
+      end
+    end
+
+    return false
   end
 
   def draw (surface)
@@ -108,23 +180,140 @@ class GameObject
   end
 
   def move_left
+    @direction = :left
     @vel.x = -Constants::PLAYER_SPEED
     @vel.y = 0
+    turn
   end
 
   def move_right
+    @direction = :right
     @vel.x = Constants::PLAYER_SPEED
     @vel.y = 0
+    turn
   end
 
   def move_up
+    @direction = :up
     @vel.y = -Constants::PLAYER_SPEED
     @vel.x = 0
+    turn
   end
 
   def move_down
+    @direction = :down
     @vel.y = Constants::PLAYER_SPEED
     @vel.x = 0
+    turn
+  end
+
+  def turn; end
+
+  def add_turn (turning_point)
+    @turns << turning_point
+  end
+
+  def turn_to (turning_point)
+    self.send("move_#{turning_point.direction}") unless turning_point.nil?
+  end
+
+  def copy (other)
+    @vel       = other.vel.dup
+    @pos       = other.pos.dup
+    @direction = other.direction.to_s.dup.to_sym
+  end
+
+  def up?
+    @direction == :up
+  end
+
+  def down?
+    @direction == :down
+  end
+
+  def left?
+    @direction == :left
+  end
+
+  def right?
+    @direction == :right
+  end
+
+  def vertical?
+    up? || down?
+  end
+
+  def horizontal?
+    left? || right?
+  end
+end
+
+class Player < GameObject
+  def initialize
+    super
+    @pos.x = 312
+    @pos.y = 600
+    @direction = :up
+    move_up
+
+    @living = true
+
+    @pieces = []
+    @turns  = []
+  end
+
+  def living?
+    @living
+  end
+
+  def update
+    super
+
+    remove_turns = []
+    @pieces.each do |piece|
+      piece.update
+      if collide?(piece)
+        @living = false
+        return
+      end
+      @turns.each_with_index do |turn, i|
+        if piece.x == turn.x && piece.y == turn.y
+          piece.turn_to(turn) 
+          remove_turns << i if piece == @pieces.last
+        end
+      end
+    end
+    remove_turns.each { |i| @turns.delete_at(i) }
+  end
+
+  def add_piece
+    @pieces << piece_factory
+  end
+
+  def turn
+    @turns << TurningPoint.new(@pos.x, @pos.y, @direction)
+  end
+
+  def draw (screen)
+    @pieces.each { |piece| piece.draw(screen) }
+    super(screen)
+  end
+
+  def piece_factory
+    piece = GameObject.new
+    tail = @pieces.last || self
+    piece.copy(tail)
+    offset = Constants::TRAIL_OFFSET # * (@pieces.size+1)
+    if tail.left?
+      piece.x += offset
+    elsif tail.right?
+      piece.x -= offset
+    elsif tail.up?
+      piece.y += offset
+    elsif tail.down?
+      piece.y -= offset
+    end
+    return piece
   end
 end
 
