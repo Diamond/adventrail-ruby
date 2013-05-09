@@ -7,6 +7,7 @@ class Constants
   PLAYER_SPEED = 4
   TRAIL_OFFSET = 16
   PLAYER_SIZE  = 16
+  PELLETS      = 5
 end
 
 class Main
@@ -22,6 +23,8 @@ class Main
     @background.fill([0, 0, 0])
 
     @player = Player.new
+    @food   = []
+    Constants::PELLETS.times { @food << Food.new }
   end
 
   def run
@@ -35,11 +38,19 @@ class Main
   def draw
     @screen.fill [0, 0, 0]
     @player.draw(@screen)
+    @food.each { |pellet| pellet.draw(@screen) }
     @screen.flip
   end
 
   def update
     @player.update
+
+    @food.each do |pellet|
+      if pellet.full_collide? @player
+        @player.add_piece
+        pellet.random_coord
+      end
+    end
 
     quit unless @player.living?
 
@@ -111,7 +122,7 @@ class TurningPoint < Point
 end
 
 class GameObject
-  attr_accessor :pos, :vel, :direction, :image
+  attr_accessor :pos, :vel, :direction, :image, :hostile
   def initialize (color=[255,255,255])
     @image = Rubygame::Surface.new([Constants::PLAYER_SIZE, Constants::PLAYER_SIZE])
     @image.fill(color)
@@ -121,7 +132,8 @@ class GameObject
     @direction = nil
 
     @turns = []
-    @cycles = 0
+
+    @hostile = false
   end
 
   def x
@@ -172,6 +184,15 @@ class GameObject
       end
     end
 
+    return false
+  end
+
+  def full_collide? (other)
+    if (other.x >= @pos.x && other.x <= @pos.x + Constants::PLAYER_SIZE) || (other.x + Constants::PLAYER_SIZE >= @pos.x && other.x + Constants::PLAYER_SIZE <= @pos.x + Constants::PLAYER_SIZE)
+      if (other.y >= @pos.y && other.y <= @pos.y + Constants::PLAYER_SIZE) || (other.y + Constants::PLAYER_SIZE >= @pos.y && other.y + Constants::PLAYER_SIZE <= @pos.y + Constants::PLAYER_SIZE)
+        return true
+      end
+    end
     return false
   end
 
@@ -248,6 +269,25 @@ class GameObject
   end
 end
 
+class Food < GameObject
+  def initialize
+    super ([255, 0, 0])
+    random_coord
+  end
+
+  def random_coord
+    @pos.x = rand(20..600)
+    @pos.y = rand(20..600)
+  end
+
+  def update
+  end
+
+  def draw (screen)
+    super screen
+  end
+end
+
 class Player < GameObject
   def initialize
     super
@@ -268,6 +308,11 @@ class Player < GameObject
 
   def update
     super
+
+    if @pos.x < 0 || @pos.x + Constants::PLAYER_SIZE > 640 || @pos.y < 0 || @pos.y + Constants::PLAYER_SIZE > 640
+      @living = false
+      return
+    end
 
     remove_turns = []
     @pieces.each do |piece|
