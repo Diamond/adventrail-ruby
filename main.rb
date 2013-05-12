@@ -110,6 +110,13 @@ class Point
   def == (other)
     !other.nil? && @x == other.x && @y == other.y
   end
+
+  def distance (other)
+    dx = (other.x - @x).abs
+    dy = (other.y - @y).abs
+
+    return [dx, dy]
+  end
 end
 
 class TurningPoint < Point
@@ -282,6 +289,10 @@ class GameObject
   def horizontal?
     left? || right?
   end
+
+  def center
+    Point.new(@pos.x + Constants::PLAYER_SIZE / 2, @pos.y + Constants::PLAYER_SIZE)
+  end
 end
 
 class Food < GameObject
@@ -312,6 +323,7 @@ class Player < GameObject
     move_up
 
     @living = true
+    @player = true
 
     @pieces = []
     @turns  = []
@@ -324,15 +336,16 @@ class Player < GameObject
   def update
     super
 
-    if @pos.x < 0 || @pos.x + Constants::PLAYER_SIZE > 640 || @pos.y < 0 || @pos.y + Constants::PLAYER_SIZE > 640
+    if @player && (@pos.x < 0 || @pos.x + Constants::PLAYER_SIZE > 640 || @pos.y < 0 || @pos.y + Constants::PLAYER_SIZE > 640)
       @living = false
       return
     end
 
     remove_turns = []
+    last_piece = self
     @pieces.each do |piece|
       piece.update
-      if collide?(piece)
+      if collide?(piece) && @player
         @living = false
         return
       end
@@ -342,6 +355,7 @@ class Player < GameObject
           remove_turns << i if piece == @pieces.last
         end
       end
+      last_piece = piece
     end
     remove_turns.each { |i| @turns.delete_at(i) }
   end
@@ -385,6 +399,7 @@ class Enemy < Player
 
     @pieces = []
     @turns  = []
+    @player = false
 
     change_direction
     5.times { add_piece }
@@ -398,13 +413,20 @@ class Enemy < Player
   end
 
   def update
-    if @time_until_turn <= 0
+    if @time_until_turn <= 0 || moving_off_screen?
       reset_time
       change_direction
     else
       @time_until_turn -= 1
     end
     super
+  end
+
+  def moving_off_screen?
+    return true if up? && @pos.y <= 4 + Constants::PLAYER_SIZE
+    return true if down? && @pos.y >= 636 - Constants::PLAYER_SIZE
+    return true if left? && @pos.x <= 4 + Constants::PLAYER_SIZE
+    return true if right? && @pos.x >= 636 - Constants::PLAYER_SIZE
   end
 
   def change_direction
@@ -428,7 +450,7 @@ class Enemy < Player
     move
   end
 
-  def on_edge
+  def on_edge?
     on_left? || on_right? || on_top? || on_bottom?
   end
 
@@ -437,7 +459,7 @@ class Enemy < Player
   end
 
   def on_bottom?
-    @pos.y + Constants::PLAYER_SIZE > 636
+    @pos.y + Constants::PLAYER_SIZE >= 600
   end
 
   def on_left?
@@ -445,7 +467,7 @@ class Enemy < Player
   end
 
   def on_right?
-    @pos.x + Constants::PLAYER_SIZE > 636
+    @pos.x + Constants::PLAYER_SIZE > 600
   end
 end
 
