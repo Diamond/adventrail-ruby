@@ -1,4 +1,6 @@
 class Player < GameObject
+  attr_accessor :living
+
   def initialize(color=[255, 255, 255])
     super(color)
     @pos.x = 312

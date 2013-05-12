@@ -46,6 +46,8 @@ class Main
   end
 
   def update
+    @player.living = false if @enemy.collide_player?(@player)
+
     @player.update
     @enemy.update
 

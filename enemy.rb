@@ -36,6 +36,14 @@ class Enemy < Player
     return true if right? && @pos.x >= 636 - Constants::PLAYER_SIZE
   end
 
+  def collide_player? (player)
+    return true if collide? (player)
+    @pieces.each do |piece|
+      return true if piece.collide?(player)
+    end
+    return false
+  end
+
   def change_direction
     directions = []
     if (up? || down?)
